@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Charts Web App</title>
+    <script type ="text/javascript">
+var stat_mean = function(arr) {
+    var total = 0,
+        n = arr.length;
+    for (var i = 0; i < n; i++) {
+        total += arr[i];
+    }
+    return total / n;
+};
+
+var stat_median = function(arr) {
+    arr.sort(function(a, b){return a-b});
+    var n = arr.length;
+    var i = 0;
+	
+    if ((n % 2) == 0) {
+        i = n / 2;
+        return ((arr[i - 1] + arr[i]) / 2);
+    } else {
+        i = (n - 1) / 2;
+        return arr[i];
+    }
+};
+
+var stat_mean = function(arr) {
+    return ((Math.max.apply(null, arr))
+        - (Math.min.apply(null, arr)));
+};
+
+var stat_var = function(arr, sample = false) {
+    var n = arr.length,
+        mean = stat_mean(arr),
+        sum = 0;
+    
+    for (var i = 0; i < n;, i++) {
+        sum += Month.pow(arr[i] - mean, 2);
+    }
+    if ( sample ) { n--; }
+    return (sum / (n));
+};
+
+var stat_stdev = function(arr, sample = false) {
+    return Math.sqrt(stat_var(arr, sample));
+};
+
+var stat_covar = function(arr1, arr2, sample = false) {
+	var n = arr.length,
+        mean1 = stat_mean(arr1),
+        mean2 = stat_mean(arr2),
+        sum = 0;
+    
+    for (var i = 0; i < n; i++) {
+        sum += (arr1[i] - mean1) * (arr2[i] - mean2);
+    }
+    
+    if ( sample ) { n--; }
+    return (sum / n);
+};
+
+var stat_correl = function(arr1, arr2) {
+    var covar = stat_covar(arr1, arr2, false),
+        stdev1 = stat_stdev(arr1),
+        stdev2 = stat_stdev(arr2);
+    
+    return (covar / (stdev1 * stdev2));
+};
+
+var stat_percentile = function(arr, per) {
+    //this function could use some tweaking...
+    arr.sort(function(a, b){return a-b});
+    
+    var n = arr.length,
+        i = per * arr.length;
+    var fi = Math.floor(i);
+    
+    if (i == fi) {
+        return arr[i];
+    } else {
+        var ci = Math.ceil(i);
+        return (arr[fi] * 0.5) + (arr[ci] * 0.5);
+    }
+};
+    </script>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <!-- http://stackoverflow.com/a/23763523/1927178 -->
+	<script src="https://jquery-csv.googlecode.com/files/jquery.csv-0.71.min.js"></script>
+    <script type="text/javascript" src="dygraph-combined.js"></script>
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9">
+	<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->
+	<style>
+	.error {    color: red; font-weight: bold; }
+	.hide {     display: none; }
+	ul {        list-style-type: none; }
+	</style>
+</head>
+
+
+<body>
+
+<center><small>(Click and drag to zoom. Double-click to zoom back out.)</small></center>
+<div id="chart" style="height:350px;width:750px;margin-left:auto;margin-right:auto;"></div>
+<br />
+
+<div id="message">
+<!-- <span class="error">Error Message Here</span><br /> -->
+</div>
+
+Please enter a stock ticker:
+<ul id="tickers">
+	<li class="stocks"><input type="text" id="ticker1" size="10" maxlength="12" />
+	<button class="sub">-</button><button class="add">+</button></li>
+</ul>
+
+
+Chart type: <select id="chart-type" onchange="chgType();">
+	<option value="beta">Beta</option>
+	<option value="stdev">Standard Deviation</option>
+	<option value="correl">Correlation</option>
+</select>
+
+<ul id="market-tickers" class="hide">
+	<li><input type="text" id="market-ticker" size="10" maxlength="12" /></li>
+</ul>
+
+<br />
+<label><input type="checkbox" checked="checked" id="use-dygraph" /> Use new chart type? <small>(adds zoom, mobile-friendly, may not work in IE)</small></label>
+<br /><br />
+
+<input type="button" id="submit-button" name="send" value="Update Chart" />
+
+<br /><br /><small>Please note: calculations are made using weekly data from <b><a target="_blank" href="http://finance.yahoo.com">Yahoo! Finance</a></b>.
+<br /><a target="_blank" href="mailto:zacharymueller@gmail.com">Email</a> or <a target="_blank" href="https://www.facebook.com/zach.mueller">Facebook</a> me for comments or requests.
+<br />Rolling betas calculated against S&P500 until market input bugs are fixed. Enjoy!
+</small>
+<div id="output-test"></div>
+
+<script type="text/javascript">
+$(".add").live('click',function(){
+	var n = $("ul li.stocks").length + 1;
+	if ( n <= 5 ) {
+		$(".add").remove();
+		$(".sub").remove();
+		$("#tickers").append('<li class="stocks"><input type="text" id="ticker' + n + '" size="10" maxlength="12" />' + 
+		'<button class="sub">-</button><button class="add">+</button></li>');
+		$("#ticker" + n).focus();
+	} else {
+		alert( 'Only up to 5 stocks allowed.' );
+	}
+	if ( n == 5 ) $(".add").remove();
+});
+$(".sub").live('click',function(){
+	var n = $("ul li.stocks").length - 1;
+	if ( n > 0 ) {
+		$(".add").remove();
+		$(".sub").remove();
+		$("#tickers li:last").remove();
+		$("#tickers li:last").append('<button class="sub">-</button><button class="add">+</button>');
+		$("#ticker" + n).focus();
+	}
+});
+
+var chgType = function() {
+	if ( $('#chart-type').val() == 'correl' ) {
+		$('#market-tickers').show();
+	} else {
+		$('#market-tickers').hide();
+	}
+};
+
+$("#submit-button").click(function(e){
+    var market = '^GSPC',
+        d = new Date();
+    var todayDay = d.getDate(),
+        todayMonth = d.getMonth() + 1,
+        todayYear = d.getFullYear();
+    
+    var host = 'http://ichart.finance.yahoo.com/table.csv',
+        a = 0,
+        b = 01,
+        c = 1950,
+        d = todayMonth - 1,
+        e = todayDay,
+        f = todayYear,
+        g = 'w';
+    
+    // start loop
+    var fullURL = host + '?s=' + encodeURIComponent(market) +
+        '&d=' + encodeURIComponent(d) + '&e=' + encodeURIComponent(e) +
+        '&f=' + encodeURIComponent(f) + '&g=' + encodeURIComponent(g) +
+        '&a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b) +
+        '&c=' + encodeURIComponent(c) + '&ignore=.csv';
+    
+    alert( fullURL );
+    //http://stackoverflow.com/a/21765376/1927178
+    //http://stackoverflow.com/a/12479064/1927178
+    //http://stackoverflow.com/a/15637170/1927178
+    csvData = $.ajax({
+        type: "GET",
+        url: fullURL,
+        //dataType: "text/csv",
+        dataType: "jsonp",
+        success: function (result) {
+            alert(result);
+        }
+    });
+    
+    return null;
+    
+    var data = $.csv.toArrays(fullURL);
+    var html = generateTable(data);
+    $('#output-test').empty();
+    $('#output-test').html(html);
+    
+    return null;
+    
+	var q = '', t = '', m = '', d, type = '', m = '';
+	$("#tickers li").each(function(index){
+		t = $(this).find('input').val();
+		if ( t != '' ) {
+			q = q + ',' + t;
+		}
+	});
+	if ( $('#chart-type').val() != '' ) {
+		type = '&t=' + $('#chart-type').val();
+	}
+	if ( $('#use-dygraph').attr('checked') == 'checked' ) {
+		d = true;
+	} else {
+		d = false;
+	}
+	q.replace('&','');
+	if ( q != '' ) {
+		q = q.substring(1, q.length);
+		if ( $('#market-ticker').val() != '' ) m = '&m=' + $('#market-ticker').val();
+        alert( q );
+		//need to figure out how to initiate running the code
+        //http://stackoverflow.com/a/1034642/1927178 - windows.location.href for referring to self's url
+        //url = 'http://<?php echo $_SERVER['SERVER_NAME'] . str_replace('index.php','',$_SERVER['PHP_SELF']); ?>?' + 'q=' + q + '&d=' + d + type + m;
+		//window.location = url;
+	} else {
+		alert( 'Please enter a stock ticker' );
+	}
+});
+</script>
+<!--
+<?php
+if ( $runCalc  &&  $dygraph ) {
+	echo '<script>
+g = new Dygraph(
+	document.getElementById("chart"),' . PHP_EOL;
+	if ( isset($s) ) {
+		echo '
+	function() {
+		return "" +' . PHP_EOL;
+		echo '"Date';
+		foreach ( $s as $data ) { echo ',' . $data['ticker']; }
+		
+		$dateCount = count($dates);
+		if ( $percentiles ) {
+			echo ',10th Percentile,Median,90th Percentile\n" +' . PHP_EOL;
+			$i = 0;
+			foreach ( $dates as $date ) {
+				if ( $dateCount - $i >= 156 ) {
+					$str = '"';
+					$str .= date('Y-m-d',$date);
+					if ( $s[0][$t][$date] != 0 ) {
+						$str .= ',' . round($s[0][$t][$date],5);
+					} else {
+						$str .= ',null';
+					}
+					echo $str . ',' . $lowPercentile . ',' . $midPercentile . ',' . $highPercentile . '\n" + ' . PHP_EOL;
+				}
+				$i++;
+			}
+		} else {
+			echo '\n" +' . PHP_EOL;
+			$i = 0;
+			foreach ( $dates as $date ) {
+				if ( $dateCount - $i >= 156 ) {
+					$str = '"';
+					$str .= date('Y-m-d',$date);
+					foreach ( $s as $data ) {
+						if ( $data[$t][$date] != 0 ) {
+							$str .= ',' . round($data[$t][$date],5);
+						} else {
+							$str .= ',null';
+						}
+					}
+					echo $str . '\n" + ' . PHP_EOL;
+				}
+				$i++;
+			}
+		}
+		echo '"";
+	},';
+	} else {
+		echo '	null,';
+	}
+	echo '
+	{
+		title: "3-year Rolling ' . $type_name . '",
+		ylabel: "' . $type_name . '",
+		legend: "always",
+		labelsDivStyles: { "textAlign": "right" }
+	}
+);
+</script>' . PHP_EOL;
+}
+?>
+-->
+</body>
+</html>
